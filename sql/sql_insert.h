@@ -23,6 +23,7 @@
 typedef List<Item> List_item;
 typedef struct st_copy_info COPY_INFO;
 
+
 int mysql_prepare_insert(THD *thd, TABLE_LIST *table_list,
                          List<Item> &fields, List_item *values,
                          List<Item> &update_fields,
@@ -45,7 +46,144 @@ int write_record(THD *thd, TABLE *table, COPY_INFO *info,
 void kill_delayed_threads(void);
 bool binlog_create_table(THD *thd, TABLE *table, bool replace);
 bool binlog_drop_table(THD *thd, TABLE *table);
+int prepare_for_replace(TABLE *table, enum_duplicates handle_duplicates,
+                        bool ignore);
+int finalize_replace(TABLE *table, enum_duplicates handle_duplicates,
+                     bool ignore);
 
+
+class Write_record
+{
+  THD *thd;
+  TABLE *table;
+  COPY_INFO *info;
+  select_result *sink;
+
+  ulonglong prev_insert_id;
+  ulonglong insert_id_for_cur_row= 0;
+  uchar *key;
+  ushort key_nr;
+
+  ushort last_unique_key;
+  bool use_triggers;
+  bool versioned;
+  bool can_optimize;
+  bool ignored_error;
+
+  int (*incomplete_records_cb)(void *arg1, void *arg2);
+  void *arg1, *arg2;
+
+  ushort get_last_unique_key() const;
+  // FINALIZATION
+  void notify_non_trans_table_modified();
+  int after_insert();
+  int after_replace();
+  int after_trg_and_copied_inc();
+  int send_data();
+
+  int on_ha_error(int error)
+  {
+    info->last_errno= error;
+    table->file->print_error(error,MYF(0));
+    DBUG_PRINT("info", ("Returning error %d", error));
+    return restore_on_error();
+  }
+  int restore_on_error()
+  {
+    table->file->restore_auto_increment(prev_insert_id);
+    return ignored_error ? 0 : 1;
+  }
+  int on_ha_error_after_modify(int error)
+  {
+    info->last_errno= error;
+    table->file->print_error(error,MYF(0));
+    DBUG_PRINT("info", ("Returning error %d", error));
+    return restore_on_error_after_modify();
+  }
+  int restore_on_error_after_modify()
+  {
+    notify_non_trans_table_modified();
+    return restore_on_error();
+  }
+
+  bool is_fatal_error(int error);
+  int prepare_handle_duplicate(int error);
+  int locate_dup_record();
+
+  int replace_row();
+  int insert_on_duplicate_update();
+  int single_insert();
+  int (Write_record::*m_write_record_cb)();
+public:
+
+  /**
+    @param thd  thread context
+    @param info COPY_INFO structure describing handling of duplicates
+            and which is used for counting number of records inserted
+            and deleted.
+    @param sink result sink for the RETURNING clause
+    @param table
+    @param versioned
+    @param use_triggers
+  */
+  Write_record(THD *thd, TABLE *table, COPY_INFO *info,
+               bool versioned, bool use_triggers, select_result *sink,
+               int (*incomplete_records_cb)(void *, void *),
+               void *arg1, void* arg2):
+          thd(thd), table(table), info(info), sink(sink),
+          insert_id_for_cur_row(0), key(NULL),
+          last_unique_key(get_last_unique_key()),
+          use_triggers(use_triggers), versioned(versioned),
+          incomplete_records_cb(incomplete_records_cb), arg1(arg1), arg2(arg2)
+  {
+    switch(info->handle_duplicates)
+    {
+    case DUP_ERROR:
+      m_write_record_cb= &Write_record::single_insert;
+      break;
+    case DUP_UPDATE:
+      m_write_record_cb= &Write_record::insert_on_duplicate_update;
+      break;
+    case DUP_REPLACE:
+      bool has_delete_triggers= use_triggers &&
+                                table->triggers->has_delete_triggers();
+      bool referenced_by_fk= table->file->referenced_by_foreign_key();
+      can_optimize= !referenced_by_fk && !has_delete_triggers;
+      m_write_record_cb= &Write_record::replace_row;
+    }
+  }
+  Write_record(THD *thd, TABLE *table, COPY_INFO *info,
+               select_result *sink= NULL):
+        Write_record(thd, table, info, table->versioned(VERS_TIMESTAMP),
+                     table->triggers, sink, NULL, NULL, NULL)
+  {}
+  Write_record() = default; // dummy, to allow later (lazy) initializations
+
+  /**
+    Write a record to table with optional deleting of conflicting records,
+    invoke proper triggers if needed.
+
+    @note
+      Once this record will be written to table after insert trigger will
+      be invoked. If instead of inserting new record we will update old one
+      then both on update triggers will work instead. Similarly both on
+      delete triggers will be invoked if we will delete conflicting records.
+
+      Sets thd->transaction.stmt.modified_non_trans_table to TRUE if table which
+      is updated didn't have transactions.
+
+    @return
+      0     - success
+      non-0 - error
+  */
+  int write_record()
+  {
+    prev_insert_id= table->file->next_insert_id;
+    info->records++;
+    ignored_error= false;
+    return (this->*m_write_record_cb)();
+  }
+};
 #ifdef EMBEDDED_LIBRARY
 inline void kill_delayed_threads(void) {}
 #endif
