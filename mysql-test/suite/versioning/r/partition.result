@@ -2252,7 +2252,15 @@ partition by range(x) (
 partition p0 values less than (10),
 partition p1 values less than (20),
 partition pn values less than maxvalue);
+Warnings:
+Warning	1901	Function or expression '`t` + interval 1 month' cannot be used in the GENERATED ALWAYS AS clause of `v2`
+Warning	1105	TIMESTAMP to DATETIME conversion depends on @@time_zone
+Warning	1105	DATETIME to TIMESTAMP conversion depends on @@time_zone
 alter table t1 convert partition p1 to table tp1;
+Warnings:
+Warning	1901	Function or expression '`t` + interval 1 month' cannot be used in the GENERATED ALWAYS AS clause of `v2`
+Warning	1105	TIMESTAMP to DATETIME conversion depends on @@time_zone
+Warning	1105	DATETIME to TIMESTAMP conversion depends on @@time_zone
 show create table tp1;
 Table	Create Table
 tp1	CREATE TABLE `tp1` (
@@ -2278,6 +2286,10 @@ tp1	CREATE TABLE `tp1` (
   PERIOD FOR SYSTEM_TIME (`s`, `e`),
   CONSTRAINT `check_constr` CHECK (`u` > -1)
 ) ENGINE=X DEFAULT CHARSET=ucs2 COLLATE=ucs2_general_ci WITH SYSTEM VERSIONING
+Warnings:
+Warning	1901	Function or expression '`t` + interval 1 month' cannot be used in the GENERATED ALWAYS AS clause of `v2`
+Warning	1105	TIMESTAMP to DATETIME conversion depends on @@time_zone
+Warning	1105	DATETIME to TIMESTAMP conversion depends on @@time_zone
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -2306,6 +2318,10 @@ t1	CREATE TABLE `t1` (
  PARTITION BY RANGE (`x`)
 (PARTITION `p0` VALUES LESS THAN (10) ENGINE = X,
  PARTITION `pn` VALUES LESS THAN MAXVALUE ENGINE = X)
+Warnings:
+Warning	1901	Function or expression '`t` + interval 1 month' cannot be used in the GENERATED ALWAYS AS clause of `v2`
+Warning	1105	TIMESTAMP to DATETIME conversion depends on @@time_zone
+Warning	1105	DATETIME to TIMESTAMP conversion depends on @@time_zone
 drop tables t1, tp1;
 #
 # MDEV-29841 Partition by system_time can be converted into table but not back
@@ -2895,6 +2911,10 @@ partition by system_time interval 1 hour auto (
 partition p2 history,
 partition pn current);
 affected rows: 0
+Warnings:
+Warning	1901	Function or expression '`t` + interval 1 month' cannot be used in the GENERATED ALWAYS AS clause of `v2`
+Warning	1105	TIMESTAMP to DATETIME conversion depends on @@time_zone
+Warning	1105	DATETIME to TIMESTAMP conversion depends on @@time_zone
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -2924,6 +2944,10 @@ t1	CREATE TABLE `t1` (
 (PARTITION `p2` HISTORY ENGINE = DEFAULT_ENGINE,
  PARTITION `pn` CURRENT ENGINE = DEFAULT_ENGINE)
 affected rows: 1
+Warnings:
+Warning	1901	Function or expression '`t` + interval 1 month' cannot be used in the GENERATED ALWAYS AS clause of `v2`
+Warning	1105	TIMESTAMP to DATETIME conversion depends on @@time_zone
+Warning	1105	DATETIME to TIMESTAMP conversion depends on @@time_zone
 insert into t1 (x, c, u, i1, i2, i3, ps, pe)
 values (1, 'cc', 0, 1, 2, 3, '1999-01-01', '2000-01-01');
 affected rows: 1
@@ -2931,7 +2955,11 @@ set timestamp= unix_timestamp('2000-01-01 01:00:00');
 affected rows: 0
 update t1 set x= x + 8;
 affected rows: 1
-info: Rows matched: 1  Changed: 1  Inserted: 1  Warnings: 0
+info: Rows matched: 1  Changed: 1  Inserted: 1  Warnings: 3
+Warnings:
+Warning	1901	Function or expression '`t` + interval 1 month' cannot be used in the GENERATED ALWAYS AS clause of `v2`
+Warning	1105	TIMESTAMP to DATETIME conversion depends on @@time_zone
+Warning	1105	DATETIME to TIMESTAMP conversion depends on @@time_zone
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -2966,7 +2994,11 @@ set timestamp= unix_timestamp('2000-01-01 02:00:00');
 affected rows: 0
 update t1 set x= x - 8;
 affected rows: 1
-info: Rows matched: 1  Changed: 1  Inserted: 1  Warnings: 0
+info: Rows matched: 1  Changed: 1  Inserted: 1  Warnings: 3
+Warnings:
+Warning	1901	Function or expression '`t` + interval 1 month' cannot be used in the GENERATED ALWAYS AS clause of `v2`
+Warning	1105	TIMESTAMP to DATETIME conversion depends on @@time_zone
+Warning	1105	DATETIME to TIMESTAMP conversion depends on @@time_zone
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (

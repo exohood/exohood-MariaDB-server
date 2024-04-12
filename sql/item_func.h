@@ -1704,6 +1704,12 @@ public:
   }
   enum precedence precedence() const override { return MUL_PRECEDENCE; }
   bool fix_length_and_dec(THD *thd) override;
+  Session_env_dependency value_depends_on_session_env() const override
+  {
+    return args[0]->value_depends_on_session_env().soft_to_hard() |
+           Session_env_dependency(0,
+             Session_env_dependency::SYS_VAR_DIV_PRECISION_INCREMENT);
+  }
   void fix_length_and_dec_double();
   void fix_length_and_dec_int();
   void result_precision() override;

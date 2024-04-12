@@ -72,6 +72,7 @@
 #include "json_table.h"
 #include "sql_update.h"
 #include "sql_delete.h"
+#include "tztime.h"
 
 /* this is to get the bison compilation windows warnings out */
 #ifdef _MSC_VER
@@ -246,6 +247,7 @@ void _CONCAT_UNDERSCORED(turn_parser_debug_on,yyparse)()
   const Type_handler *type_handler;
   const class Sp_handler *sp_handler;
   CHARSET_INFO *charset;
+  const Time_zone *time_zone;
   Condition_information_item *cond_info_item;
   DYNCALL_CREATE_DEF *dyncol_def;
   Diagnostics_information *diag_info;
@@ -351,9 +353,9 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 */
 
 %ifdef MARIADB
-%expect 62
+%expect 56
 %else
-%expect 62
+%expect 56
 %endif
 
 /*
@@ -714,6 +716,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 %token  <kwd> XOR
 %token  <kwd> YEAR_MONTH_SYM
 %token  <kwd> ZEROFILL
+%token  <kwd> ZONE_SYM
 
 
 /*
@@ -1127,6 +1130,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 %token  <kwd>  THAN_SYM
 %token  <kwd>  TIES_SYM                      /* SQL-2011-N */
 %token  <kwd>  TIMESTAMP                     /* SQL-2003-R */
+%token  <kwd>  TIMESTAMP_TZ_SYM
 %token  <kwd>  TIMESTAMP_ADD
 %token  <kwd>  TIMESTAMP_DIFF
 %token  <kwd>  TIME_SYM                      /* SQL-2003-R, Oracle-R */
@@ -1218,7 +1222,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 */
 %nonassoc NOT_SYM
 %nonassoc NEG '~' NOT2_SYM BINARY
-%nonassoc COLLATE_SYM
+%nonassoc COLLATE_SYM AT_SYM
 %nonassoc SUBQUERY_AS_EXPR
 
 /*
@@ -1704,6 +1708,10 @@ rule:
         old_or_new_charset_name_or_default
         opt_load_data_charset
         UNDERSCORE_CHARSET
+
+%type <time_zone>
+        time_zone_name
+        time_zone_specifier
 
 %type <select_lex> subselect
         query_specification
@@ -5799,6 +5807,22 @@ default_collation:
             if (unlikely(cinfo->add_table_option_default_collation(
                            thd, thd->variables.character_set_collations, $4)))
               MYSQL_YYABORT;
+          }
+        ;
+
+time_zone_name:
+          TEXT_STRING_sys
+          {
+            String str($1.str, $1.length, system_charset_info);
+            if (!($$= my_tz_find(thd, &str)))
+              my_yyabort_error((ER_UNKNOWN_TIME_ZONE, MYF(0), $1.str));
+          }
+        ;
+
+time_zone_specifier:
+          TIME_SYM ZONE_SYM time_zone_name
+          {
+            $$= $3;
           }
         ;
 
@@ -10068,11 +10092,16 @@ primary_expr:
         ;
 
 string_factor_expr:
-          primary_expr
+          primary_expr %prec NEG
         | string_factor_expr COLLATE_SYM collation_name
           {
             if (unlikely(!($$= new (thd->mem_root)
                                Item_func_set_collation(thd, $1, $3))))
+              MYSQL_YYABORT;
+          }
+        | primary_expr AT_SYM time_zone_specifier
+          {
+            if (!($$= new(thd->mem_root) Item_func_at_tz(thd, $1, $3)))
               MYSQL_YYABORT;
           }
         ;
@@ -10458,6 +10487,12 @@ function_call_nonkeyword:
         | TIMESTAMP_DIFF '(' interval_time_stamp ',' expr ',' expr ')'
           {
             $$= new (thd->mem_root) Item_func_timestamp_diff(thd, $5, $7, $3);
+            if (unlikely($$ == NULL))
+              MYSQL_YYABORT;
+          }
+        | TIMESTAMP_TZ_SYM '(' expr ',' time_zone_name ')'
+          {
+            $$= new (thd->mem_root) Item_func_timestamp_tz(thd, $3, $5);
             if (unlikely($$ == NULL))
               MYSQL_YYABORT;
           }
@@ -16411,7 +16446,7 @@ keyword_sp_var_and_label:
         | DAY_SYM
         | GET_FORMAT
         | HOUR_SYM
-        | ID_SYM
+        | ID_SYM             %prec NEG
         | LAST_VALUE
         | LASTVAL_SYM
         | MINUTE_SYM
@@ -16434,6 +16469,7 @@ keyword_sp_var_and_label:
         | USER_SYM           %prec PREC_BELOW_CONTRACTION_TOKEN2
         | VALUE_SYM
         | WEIGHT_STRING_SYM
+        | ZONE_SYM
         ;
 
 
