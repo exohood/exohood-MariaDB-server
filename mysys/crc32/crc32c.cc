@@ -147,9 +147,6 @@ static inline __m128i load128(__m512i S, const char *buf)
 #define xor128(a, b) _mm_xor_epi64(a, b)
 #define and128(a, b) _mm_and_si128(a, b)
 
-#if defined __GNUC__ && !defined __clang_major__
-__attribute__((optimize(2))) /* xor3_*() requires an optimized GCC build */
-#endif
 USE_VPCLMULQDQ ATTRIBUTE_NOINLINE
 static unsigned crc32_avx512(unsigned crc, const char *buf, size_t size,
                              const crc32_tab &tab)
