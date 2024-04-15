@@ -1,13 +1,18 @@
 #include <my_global.h>
 #include <string.h>
 #include <stdint.h>
+#include <stddef.h>
 
-static int pmull_supported;
+typedef unsigned (*my_crc32_t)(unsigned, const void *, size_t);
 
-#if defined(HAVE_ARMV8_CRC)
+#ifdef HAVE_ARMV8_CRC
 
-#if defined(__APPLE__)
-#include <sys/sysctl.h>
+# ifdef HAVE_ARMV8_CRYPTO
+static unsigned crc32c_aarch64_pmull(unsigned, const void *, size_t);
+# endif
+
+# ifdef __APPLE__
+#  include <sys/sysctl.h>
 
 int crc32_aarch64_available(void)
 {
@@ -18,17 +23,17 @@ int crc32_aarch64_available(void)
   return ret;
 }
 
-const char *crc32c_aarch64_available(void)
+my_crc32_t crc32c_aarch64_available(void)
 {
-  if (crc32_aarch64_available() == 0)
-    return NULL;
-  pmull_supported = 1;
-  return "Using ARMv8 crc32 + pmull instructions";
+# ifdef HAVE_ARMV8_CRYPTO
+  if (crc32_aarch64_available())
+    return crc32c_aarch64_pmull;
+# endif
+  return NULL;
 }
-
-#else
-#include <sys/auxv.h>
-#if defined(__FreeBSD__)
+# else
+#  include <sys/auxv.h>
+#  ifdef __FreeBSD__
 static unsigned long getauxval(unsigned int key)
 {
   unsigned long val;
@@ -36,17 +41,17 @@ static unsigned long getauxval(unsigned int key)
     return 0ul;
   return val;
 }
-#else
-# include <asm/hwcap.h>
-#endif
+#  else
+#   include <asm/hwcap.h>
+#  endif
 
-#ifndef HWCAP_CRC32
-# define HWCAP_CRC32 (1 << 7)
-#endif
+#  ifndef HWCAP_CRC32
+#   define HWCAP_CRC32 (1 << 7)
+#  endif
 
-#ifndef HWCAP_PMULL
-# define HWCAP_PMULL (1 << 4)
-#endif
+#  ifndef HWCAP_PMULL
+#   define HWCAP_PMULL (1 << 4)
+#  endif
 
 /* ARM made crc32 default from ARMv8.1 but optional in ARMv8A
  * Runtime check API.
@@ -56,22 +61,37 @@ int crc32_aarch64_available(void)
   unsigned long auxv= getauxval(AT_HWCAP);
   return (auxv & HWCAP_CRC32) != 0;
 }
+# endif
 
-const char *crc32c_aarch64_available(void)
+# ifndef __APPLE__
+static unsigned crc32c_aarch64(unsigned, const void *, size_t);
+
+my_crc32_t crc32c_aarch64_available(void)
 {
   unsigned long auxv= getauxval(AT_HWCAP);
-
   if (!(auxv & HWCAP_CRC32))
     return NULL;
-
-  pmull_supported= (auxv & HWCAP_PMULL) != 0;
-  if (pmull_supported)
-    return "Using ARMv8 crc32 + pmull instructions";
-  else
-    return "Using ARMv8 crc32 instructions";
+#  ifdef HAVE_ARMV8_CRYPTO
+  /* Raspberry Pi 4 supports crc32 but doesn't support pmull (MDEV-23030). */
+  if (auxv & HWCAP_PMULL)
+    return crc32c_aarch64_pmull;
+#  endif
+  return crc32c_aarch64;
 }
+# endif
 
-#endif /* __APPLE__ */
+const char *crc32c_aarch64_impl(my_crc32_t c)
+{
+# ifdef HAVE_ARMV8_CRYPTO
+  if (c == crc32c_aarch64_pmull)
+    return "Using ARMv8 crc32 + pmull instructions";
+# endif
+# ifndef __APPLE__
+  if (c == crc32c_aarch64)
+    return "Using ARMv8 crc32 instructions";
+# endif
+  return NULL;
+}
 #endif /* HAVE_ARMV8_CRC */
 
 #ifndef HAVE_ARMV8_CRC_CRYPTO_INTRINSICS
@@ -157,25 +177,51 @@ asm(".arch_extension crypto");
   PREF4X64L2(buffer,(PREF_OFFSET), 8) \
   PREF4X64L2(buffer,(PREF_OFFSET), 12)
 
-uint32_t crc32c_aarch64(uint32_t crc, const unsigned char *buffer, uint64_t len)
+#ifndef __APPLE__
+static unsigned crc32c_aarch64(unsigned crc, const void *buf, size_t len)
 {
   uint32_t crc0, crc1, crc2;
   int64_t length= (int64_t)len;
 
+  const unsigned char *buffer= buf;
+
   crc^= 0xffffffff;
 
-  /* Pmull runtime check here.
-   * Raspberry Pi 4 supports crc32 but doesn't support pmull (MDEV-23030).
-   *
-   * Consider the condition that the target platform does support hardware crc32
-   * but not support PMULL. In this condition, it should leverage the aarch64
-   * crc32 instruction (__crc32c) and just only skip parallel computation (pmull/vmull)
-   * rather than skip all hardware crc32 instruction of computation.
-   */
-  if (pmull_supported)
+  while ((length-= sizeof(uint64_t)) >= 0)
   {
-/* The following Macro (HAVE_ARMV8_CRYPTO) is used for compiling check */
+    CRC32CX(crc, *(uint64_t *)buffer);
+    buffer+= sizeof(uint64_t);
+  }
+
+  /* The following is more efficient than the straight loop */
+  if (length & sizeof(uint32_t))
+  {
+    CRC32CW(crc, *(uint32_t *)buffer);
+    buffer+= sizeof(uint32_t);
+  }
+
+  if (length & sizeof(uint16_t))
+  {
+    CRC32CH(crc, *(uint16_t *)buffer);
+    buffer+= sizeof(uint16_t);
+  }
+
+  if (length & sizeof(uint8_t))
+    CRC32CB(crc, *buffer);
+
+  return ~crc;
+}
+#endif
+
 #ifdef HAVE_ARMV8_CRYPTO
+static unsigned crc32c_aarch64_pmull(unsigned crc, const void *buf, size_t len)
+{
+  uint32_t crc0, crc1, crc2;
+  int64_t length= (int64_t)len;
+
+  const unsigned char *buffer= buf;
+
+  crc^= 0xffffffff;
 
 /* Crypto extension Support
  * Parallel computation with 1024 Bytes (per block)
@@ -278,10 +324,6 @@ uint32_t crc32c_aarch64(uint32_t crc, const unsigned char *buffer, uint64_t len)
     if (!(length+= 1024))
       return ~crc;
 
-#endif /* HAVE_ARMV8_CRYPTO */
-
-  }  // end if pmull_supported
-
   while ((length-= sizeof(uint64_t)) >= 0)
   {
     CRC32CX(crc, *(uint64_t *)buffer);
@@ -306,6 +348,7 @@ uint32_t crc32c_aarch64(uint32_t crc, const unsigned char *buffer, uint64_t len)
 
   return ~crc;
 }
+#endif /* HAVE_ARMV8_CRYPTO */
 
 /* There are multiple approaches to calculate crc.
 Approach-1: Process 8 bytes then 4 bytes then 2 bytes and then 1 bytes

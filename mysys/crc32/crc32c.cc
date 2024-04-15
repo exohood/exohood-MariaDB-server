@@ -895,7 +895,8 @@ static int arch_ppc_probe(void) {
 #endif
 
 #if defined(HAVE_ARMV8_CRC)
-extern "C" const char *crc32c_aarch64_available(void);
+extern "C" const char *crc32c_aarch64_impl(my_crc32_t c);
+extern "C" my_crc32_t crc32c_aarch64_available(void);
 extern "C" unsigned crc32c_aarch64(unsigned, const void *, size_t);
 #endif
 
@@ -904,10 +905,10 @@ static inline my_crc32_t Choose_Extend()
 #if defined HAVE_POWER8 && defined HAS_ALTIVEC
   if (arch_ppc_probe())
     return crc32c_ppc;
-#elif defined(HAVE_ARMV8_CRC)
-  if (crc32c_aarch64_available())
-    return crc32c_aarch64;
-#else
+#elif defined HAVE_ARMV8_CRC
+  if (my_crc32_t crc= crc32c_aarch64_available())
+    return crc;
+#elif defined __i386__||defined __x86_64__||defined _M_IX86||defined _M_X64
   if (have_vpclmulqdq())
     return crc32c_vpclmulqdq;
 # ifdef HAVE_SSE42
@@ -935,7 +936,7 @@ extern "C" const char *my_crc32c_implementation()
   if (ChosenExtend == crc32c_ppc)
     return "Using POWER8 crc32 instructions";
 #elif defined(HAVE_ARMV8_CRC)
-  if (const char *ret= crc32c_aarch64_available())
+  if (const char *ret= crc32c_aarch64_impl(ChosenExtend))
     return ret;
 #elif defined HAVE_SSE42
 # ifdef USE_VPCLMULQDQ
