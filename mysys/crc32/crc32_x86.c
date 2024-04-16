@@ -56,7 +56,6 @@
 #include <stddef.h>
 
 #ifdef __GNUC__
-# include <x86intrin.h>
 # include <emmintrin.h>
 # include <smmintrin.h>
 # include <tmmintrin.h>
