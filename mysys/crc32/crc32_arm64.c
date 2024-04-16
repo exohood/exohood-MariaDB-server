@@ -215,7 +215,6 @@ static unsigned crc32c_aarch64(unsigned crc, const void *buf, size_t len)
 static unsigned crc32c_aarch64_pmull(unsigned crc, const void *buf, size_t len)
 {
   int64_t length= (int64_t)len;
-# endif
   const unsigned char *buffer= buf;
 
   crc^= 0xffffffff;
