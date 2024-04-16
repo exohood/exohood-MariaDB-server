@@ -58,6 +58,9 @@
 #ifdef __GNUC__
 # include <x86intrin.h>
 # include <emmintrin.h>
+# include <smmintrin.h>
+# include <tmmintrin.h>
+# include <wmmintrin.h>
 # define USE_PCLMUL __attribute__((target("sse4.2,pclmul")))
 #elif defined(_MSC_VER)
 # include <intrin.h>
