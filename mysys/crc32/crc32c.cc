@@ -350,7 +350,14 @@ static inline void Slow_CRC32(uint64_t* l, uint8_t const **p)
 # include <immintrin.h>
 # define USE_SSE42 /* nothing */
 #elif defined __GNUC__ && (defined __i386__||defined __x86_64__)
-# include <nmmintrin.h>
+# if __GNUC__ < 5 && !defined __clang_major__
+/* the headers do not really work in GCC before version 5 */
+#  define _mm_crc32_u8(crc,data) __builtin_ia32_crc32qi(crc,data)
+#  define _mm_crc32_u32(crc,data) __builtin_ia32_crc32si(crc,data)
+#  define _mm_crc32_u64(crc,data) __builtin_ia32_crc32di(crc,data)
+# else
+#  include <nmmintrin.h>
+# endif
 # define USE_SSE42 __attribute__((target("sse4.2")))
 #endif
 
