@@ -4305,14 +4305,28 @@ void do_write_file(struct st_command *command)
 
 /**
   Write a line to the start of the file.
-  Truncates the file if it exists.
+  Truncates existing file, creates new one if it doesn't exist.
+
+  Usage
+  write_line <line> <filename>;
+
+  Example
+  --write_line restart $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+  @note Both the file and the line parameters are evaluated
+  (can be variables).
+
+  @note This is a better alternative to
+  exec echo > file, as it doesn't depend on shell,
+  and can better handle sporadic file access errors caused
+  by antivirus or backup software on Windows.
 */
 void do_write_line(struct st_command *command)
 {
-  static DYNAMIC_STRING ds_line;
-  static DYNAMIC_STRING ds_filename;
+  DYNAMIC_STRING ds_line;
+  DYNAMIC_STRING ds_filename;
 
-  const struct command_arg write_line_args[] = {
+  struct command_arg write_line_args[] = {
     { "line", ARG_STRING, FALSE , &ds_line, "line to add" },
     { "filename", ARG_STRING, TRUE, &ds_filename, "File to write to" },
   };
@@ -4326,6 +4340,7 @@ void do_write_line(struct st_command *command)
 
   if (bad_path(ds_filename.str))
     DBUG_VOID_RETURN;
+  dynstr_append_mem(&ds_line, "\n",1);
   str_to_file2(ds_filename.str, ds_line.str, ds_line.length, FALSE);
   dynstr_free(&ds_filename);
   dynstr_free(&ds_line);
