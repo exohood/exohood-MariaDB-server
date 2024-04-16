@@ -3,6 +3,7 @@
 #include <my_global.h>
 
 #ifdef _MSC_VER
+# include <intrin.h>
 # define USE_VPCLMULQDQ /* nothing */
 #else
 # include <cpuid.h>
