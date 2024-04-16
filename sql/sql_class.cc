@@ -501,6 +501,12 @@ int thd_sql_command(const THD *thd)
   return (int) thd->lex->sql_command;
 }
 
+extern "C"
+bool thd_sql_is_explain(const THD *thd)
+{
+  return MY_TEST(thd->lex->describe);
+}
+
 /*
   Returns options used with DDL's, like IF EXISTS etc...
   Will returns 'nonsense' if the command was not a DDL.

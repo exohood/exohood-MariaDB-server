@@ -15882,7 +15882,9 @@ ha_innobase::start_stmt(
 	/* Reset the AUTOINC statement level counter for multi-row INSERTs. */
 	trx->n_autoinc_rows = 0;
 
-	const auto sql_command = thd_sql_command(thd);
+	auto sql_command = thd_sql_command(thd);
+        if (thd_sql_is_explain(thd))
+          sql_command= SQLCOM_SELECT;
 
 	m_prebuilt->hint_need_to_fetch_extra_cols = 0;
 	reset_template();
@@ -16044,7 +16046,9 @@ ha_innobase::external_lock(
 		}
 	}
 
-	const auto sql_command = thd_sql_command(thd);
+	auto sql_command = thd_sql_command(thd);
+        if (thd_sql_is_explain(thd))
+          sql_command= SQLCOM_SELECT;
 
 	/* Check for UPDATEs in read-only mode. */
 	if (srv_read_only_mode) {
@@ -16467,7 +16471,9 @@ ha_innobase::store_lock(
 
 	DBUG_ASSERT(EQ_CURRENT_THD(thd));
 	const bool in_lock_tables = thd_in_lock_tables(thd);
-	const int sql_command = thd_sql_command(thd);
+	int sql_command = thd_sql_command(thd);
+        if (thd_sql_is_explain(thd))
+          sql_command= SQLCOM_SELECT;
 
 	if (srv_read_only_mode
 	    && (sql_command == SQLCOM_UPDATE
