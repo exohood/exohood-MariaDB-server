@@ -378,11 +378,11 @@ static ATTRIBUTE_NOINLINE bool have_vpclmulqdq()
 {
 # ifdef _MSC_VER
   int regs[4];
-  __cpuid(regs, 7);
+  __cpuidex(regs, 7, 0);
   uint32_t ebx= regs[1], ecx= regs[2];
 # else
   uint32_t eax= 0, ebx= 0, ecx= 0, edx= 0;
-  __cpuid(7, eax, ebx, ecx, edx);
+  __cpuid_count(7, 0, eax, ebx, ecx, edx);
 # endif
   return ecx & 1U<<10/*VPCLMULQDQ*/ &&
     !(~ebx & ((1U<<16/*AVX512F*/ | 1U<<17/*AVX512DQ*/ |
