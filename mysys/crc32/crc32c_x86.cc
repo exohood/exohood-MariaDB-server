@@ -355,8 +355,10 @@ static unsigned crc32_avx512(unsigned crc, const char *buf, size_t size,
         else
         {
           // only_less_than_4:
-          alignas(16) static const int8_t shift[17]=
-          {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1};
+          alignas(16) static const int8_t shift[18]=
+            {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+             /* the rest means "fill in zeroes" */
+             -1, -1, -1, -1, -1, -1, -1};
           crc_out= _mm_shuffle_epi8
             (crc_out, _mm_loadu_epi64(reinterpret_cast<const char*>(shift) +
                                       3 - size));
