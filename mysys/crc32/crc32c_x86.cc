@@ -129,18 +129,11 @@ static inline __m128i load128(__m512i S, const char *buf)
 #define xor128(a, b) _mm_xor_epi64(a, b)
 #define and128(a, b) _mm_and_si128(a, b)
 
-static const __m128i mask1=
-  _mm_set_epi64x(0x8080808080808080, 0x8080808080808080);
-alignas(64) static const __mmask16 size_mask[16]= {
-  0x0001, 0x0003, 0x0007, 0x000f, 0x001f, 0x003f, 0x007f, 0x00ff,
-  0x01ff, 0x03ff, 0x07ff, 0x0fff, 0x1fff, 0x3fff, 0x5fff, 0x7fff
-};
-
 USE_VPCLMULQDQ ATTRIBUTE_NOINLINE
 static unsigned crc32_avx512(unsigned crc, const char *buf, size_t size,
                              const crc32_tab &tab)
 {
-  const __m512i S= _mm512_broadcast_i32x4(mask1),
+  const __m512i S= _mm512_broadcast_i32x4(_mm_set1_epi32(0x80808080)),
     crc_in=
     _mm512_bslli_epi128(_mm512_castsi128_si512(_mm_cvtsi32_si128(crc)), 12),
     b512= _mm512_broadcast_i32x4(*reinterpret_cast<const __m128i*>(&tab.b512));
@@ -338,6 +331,10 @@ static unsigned crc32_avx512(unsigned crc, const char *buf, size_t size,
       }
       else if (size < 16)
       {
+        alignas(64) static const __mmask16 size_mask[16]= {
+          0x0001, 0x0003, 0x0007, 0x000f, 0x001f, 0x003f, 0x007f, 0x00ff,
+          0x01ff, 0x03ff, 0x07ff, 0x0fff, 0x1fff, 0x3fff, 0x5fff, 0x7fff
+        };
         crc_out= _mm_maskz_loadu_epi8(size_mask[size - 1], buf);
         crc_out= _mm_shuffle_epi8(crc_out, _mm512_castsi512_si128(S));
         crc_out= xor128(crc_out, _mm512_castsi512_si128(crc_in));
@@ -349,7 +346,8 @@ static unsigned crc32_avx512(unsigned crc, const char *buf, size_t size,
             0x0706050403020100, 0x000e0d0c0b0a0908 };
           crc_out= _mm_shuffle_epi8
             (crc_out, xor128(_mm_loadu_epi64(reinterpret_cast<const char*>
-                                             (shift) + 16 - size), mask1));
+                                             (shift) + 16 - size),
+                             _mm512_castsi512_si128(S)));
           goto done_128;
         }
         else
@@ -359,6 +357,7 @@ static unsigned crc32_avx512(unsigned crc, const char *buf, size_t size,
             {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
              /* the rest means "fill in zeroes" */
              -1, -1, -1, -1, -1, -1, -1};
+          /* Shift by 5, 6, or 7 bytes, zero-filling */
           crc_out= _mm_shuffle_epi8
             (crc_out, _mm_loadu_epi64(reinterpret_cast<const char*>(shift) +
                                       3 - size));
