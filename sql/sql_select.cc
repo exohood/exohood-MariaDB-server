@@ -31476,20 +31476,17 @@ static bool set_limit_for_unit(THD *thd, SELECT_LEX_UNIT *unit, ha_rows lim)
        ((ha_rows)gpar->limit_params.select_limit->val_int()) < lim))
     return false;
 
-  Query_arena *arena, backup;
-  arena= thd->activate_stmt_arena_if_needed(&backup);
-
-  gpar->limit_params.select_limit=
+  Item_int *new_select_limit=
     new (thd->mem_root) Item_int(thd, lim, MAX_BIGINT_WIDTH);
-  if (gpar->limit_params.select_limit == 0)
+
+  if (unlikely(new_select_limit == NULL))
     return true; // EOM
+
+  thd->change_item_tree(&gpar->limit_params.select_limit, new_select_limit);
 
   unit->set_limit(gpar);
 
   gpar->limit_params.explicit_limit= true; // to show in EXPLAIN
-
-  if (arena)
-    thd->restore_active_arena(arena, &backup);
 
   return false;
 }

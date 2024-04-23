@@ -5352,6 +5352,22 @@ bool Prepared_statement::execute(String *expanded_query, bool open_cursor)
   if (state == Query_arena::STMT_PREPARED && !qc_executed)
     state= Query_arena::STMT_EXECUTED;
 
+  if (state == Query_arena::STMT_EXECUTED)
+  {
+    /*
+      Although an Item_int object representing the default limit value is
+      restored by calling the function cleanup_stmt(false) few lines above,
+      a value of the data member limit_params.explicit_limit is not restored
+      to its original value. Do it here manually.
+    */
+    lex->unit.global_parameters()->limit_params.explicit_limit= false;
+    /*
+      Update limit value of the most upper select with the default
+      value of limit just restored
+    */
+    lex->unit.set_limit(lex->unit.global_parameters());
+  }
+
   if (likely(error == 0) && this->lex->sql_command == SQLCOM_CALL)
   {
     if (is_sql_prepare())

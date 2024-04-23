@@ -6282,12 +6282,29 @@ static bool execute_sqlcom_select(THD *thd, TABLE_LIST *all_tables)
   select_result *result=lex->result;
   bool res;
   /* assign global limit variable if limit is not given */
+  SELECT_LEX *param= lex->unit.global_parameters();
+  if (!param->limit_params.explicit_limit)
   {
-    SELECT_LEX *param= lex->unit.global_parameters();
-    if (!param->limit_params.explicit_limit)
-      param->limit_params.select_limit=
-        new (thd->mem_root) Item_int(thd,
-                                     (ulonglong) thd->variables.select_limit);
+    if (!param->limit_params.select_limit)
+    {
+      Query_arena *arena, backup;
+      arena= thd->activate_stmt_arena_if_needed(&backup);
+
+      Item_int *new_limit_val=
+          new (thd->mem_root) Item_int(thd,
+                                       (ulonglong) thd->variables.select_limit);
+      if (arena)
+        thd->restore_active_arena(arena, &backup);
+
+      if (!new_limit_val)
+        return true; // OOM
+
+      param->limit_params.select_limit= new_limit_val;
+    }
+    else if ((ha_rows)param->limit_params.select_limit->val_int() !=
+             thd->variables.select_limit)
+      ((Item_int*)param->limit_params.select_limit)->value=
+        thd->variables.select_limit;
   }
 
   if (!(res= open_and_lock_tables(thd, all_tables, TRUE, 0)))
