@@ -28,12 +28,12 @@
 #define DO_TEST_CRC32(crc,str)  \
     ok(crc32(crc,(const Bytef *)str,(uint)(sizeof(str)-1)) == my_checksum(crc, str, sizeof(str)-1), "crc32 '%s'",str)
 
-/* Check that CRC32-C calculation returns correct result*/
+/* Check that CRC-32C calculation returns correct result*/
 #define DO_TEST_CRC32C(crc,str,expected) \
     do { \
      unsigned int v = my_crc32c(crc, str, sizeof(str)-1); \
-     printf("crc32(%u,'%s',%zu)=%u\n",crc,str,sizeof(str)-1,v); \
-     ok(expected == my_crc32c(crc, str, sizeof(str)-1),"crc32c '%s'",str); \
+     printf("crc32c(%#x,'%s',%zu)=%#x\n",crc,str,sizeof(str)-1,v); \
+     ok(expected == v,"crc32c '%s'",str); \
     }while(0)
 
 
