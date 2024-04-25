@@ -1202,3 +1202,13 @@ call mtr.add_suppression("Plugin 'InnoDB' init function returned error");
 call mtr.add_suppression("Plugin 'InnoDB' registration as a STORAGE ENGINE failed");
 
 --enable_query_log
+
+--echo #
+--echo # MDEV-22855 Assertion (!field->prefix_len ||
+--echo #	field->fixed_len == field->prefix_len)
+--echo #	failed in btr_node_ptr_max_size
+--echo #
+CREATE TABLE t1(c CHAR(255) CHARACTER SET UTF32, KEY k1(c(250)))ENGINE=InnoDB;
+INSERT INTO t1 VALUES(100000);
+DROP TABLE t1;
+--echo # End of 10.4 tests

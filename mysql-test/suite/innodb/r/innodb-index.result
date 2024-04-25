@@ -1947,3 +1947,12 @@ Warnings:
 Warning	1082	InnoDB: Table test/t contains 0 indexes inside InnoDB, which is different from the number of indexes 1 defined in the MariaDB 
 Warning	1082	InnoDB: Table test/t contains 0 indexes inside InnoDB, which is different from the number of indexes 1 defined in the MariaDB 
 DROP TABLE t;
+#
+# MDEV-22855 Assertion (!field->prefix_len ||
+#	field->fixed_len == field->prefix_len)
+#	failed in btr_node_ptr_max_size
+#
+CREATE TABLE t1(c CHAR(255) CHARACTER SET UTF32, KEY k1(c(250)))ENGINE=InnoDB;
+INSERT INTO t1 VALUES(100000);
+DROP TABLE t1;
+# End of 10.4 tests
